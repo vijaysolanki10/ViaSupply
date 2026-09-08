@@ -86,36 +86,3 @@ function getAccessToken() {
     }
   }
 }
-
-function displayAllProperties() {
-  var properties = PropertiesService.getDocumentProperties();
-  var allProperties = properties.getProperties();
-  for (var key in allProperties) {
-    Logger.log(key + ' = ' + allProperties[key]);
-  }
-}
-
-function saveCredentialManually() {
-  var properties = PropertiesService.getDocumentProperties();
-  properties.setProperty('CLIENT_ID', 'amzn1.application-oa2-client.023c66ec1ad74ff095e1d1666c8a4888');
-  properties.setProperty('CLIENT_SECRET', 'YOUR_CLIENT_SECRET');
-  properties.setProperty('REFRESH_TOKEN', 'YOUR_REFRESH_TOKEN');
-  Logger.log("CLIENT_ID Saved");
-  Logger.log("CLIENT_SECRET Saved");
-  Logger.log("REFRESH_TOKEN Saved");
-
-}
-
-
-function clearProperties() {
-  var properties = PropertiesService.getDocumentProperties();
-  properties.deleteProperty('access_token');
-  properties.deleteProperty('token_type');
-  properties.deleteProperty('expires_in');
-  properties.deleteProperty('access_token_created_at');
-  properties.deleteProperty('access_token_expires_at');
-}
-
-function deleteAllDocumentProperties() {
-  PropertiesService.getDocumentProperties().deleteAllProperties();
-}
