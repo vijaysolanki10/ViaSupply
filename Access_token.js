@@ -8,37 +8,83 @@ var TOKEN_URL = 'https://api.amazon.com/auth/o2/token'; // Amazon's token endpoi
 // Function to retrieve access token using refresh token
 function getAccessToken() {
   var properties = PropertiesService.getDocumentProperties();
-  var payload = {
-    grant_type: 'refresh_token',
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    refresh_token: REFRESH_TOKEN
-  };
+  var accessToken = properties.getProperty('access_token');
+  var expiresAt = Number(properties.getProperty('expires_in'));
+  var safetyMargin = 1 * 60 * 1000;
 
-  var options = {
-    method: 'post',
-    contentType: 'application/x-www-form-urlencoded',
-    payload: payload
-  };
+  if (accessToken && expiresAt && (Date.now() + safetyMargin) < expiresAt) {
+    return accessToken;
+  }
 
-  var response = UrlFetchApp.fetch(TOKEN_URL, options);
-  var tokenData = JSON.parse(response.getContentText());
-  Logger.log(response);
-  properties.setProperty('access_token', tokenData.access_token);
-  properties.setProperty('expires_in', tokenData.expires_in);
-  properties.setProperty('token_type', tokenData.token_type);
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
 
-}
+    accessToken = properties.getProperty('access_token');
+    expiresAt = Number(properties.getProperty('expires_in'));
+    if (accessToken && expiresAt && (Date.now() + safetyMargin) < expiresAt) {
+      return accessToken;
+    }
 
-// Function to store access token and related data securely
-function storeAccessToken(tokenData) {
-  var properties = PropertiesService.getDocumentProperties();
-  scriptProperties.setProperties({
-    'access_token': tokenData.access_token,
-    'token_type': tokenData.token_type,
-    'expires_in': tokenData.expires_in,
-    'refresh_token': tokenData.refresh_token
-  });
+    var payload = {
+      grant_type: 'refresh_token',
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: REFRESH_TOKEN
+    };
+
+    var options = {
+      method: 'post',
+      contentType: 'application/x-www-form-urlencoded',
+      payload: payload,
+      muteHttpExceptions: true
+    };
+
+
+    try {
+      var response = UrlFetchApp.fetch(TOKEN_URL, options);
+      var tokenData = JSON.parse(response.getContentText());
+      Logger.log(response);
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300 || !tokenData.access_token) {
+        throw new Error('Amazon token request failed: ' + response.getContentText());
+      }
+
+      properties.setProperties({
+        'access_token': tokenData.access_token,
+        'token_type': tokenData.token_type,
+        'expires_in': String(Date.now() + (Number(tokenData.expires_in) * 1000))
+      });
+
+      return tokenData.access_token;
+    } catch (error) {
+      Logger.log('First access-token attempt failed: ' + error.message);
+      Utilities.sleep(12000);
+    }
+
+    try {
+      var response = UrlFetchApp.fetch(TOKEN_URL, options);
+      var tokenData = JSON.parse(response.getContentText());
+      Logger.log(response);
+      if (response.getResponseCode() < 200 || response.getResponseCode() >= 300 || !tokenData.access_token) {
+        throw new Error('Amazon token request failed: ' + response.getContentText());
+      }
+
+      properties.setProperties({
+        'access_token': tokenData.access_token,
+        'token_type': tokenData.token_type,
+        'expires_in': String(Date.now() + (Number(tokenData.expires_in) * 1000))
+      });
+
+      return tokenData.access_token;
+    } catch (error) {
+      Logger.log('Second access-token attempt failed: ' + error.message);
+      throw error;
+    }
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
 }
 
 function displayAllProperties() {
